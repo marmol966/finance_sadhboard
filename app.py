@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Vision grafica del patrimonio actual (snapshot, sin evolucion temporal),
-organizada en 4 categorias: Bancos, Activos, Renta Variable y Cripto.
+Vision grafica del patrimonio, organizada en 4 categorias (Bancos, Activos,
+Renta Variable y Cripto): snapshot actual por posicion y evolucion semanal
+historica (patrimonio, cartera/riesgo/uso de cripto, categoria de RV).
 
 Lee EXCLUSIVAMENTE en modo lectura G:\\Mi unidad\\Marmol\\3-Finances\\finance.xlsx
 (ver data_loader.py). No escribe nada fuera de "Finance Dashboard App".
@@ -227,6 +228,37 @@ def render_cartera_perf_table(filas, compact_width=False):
     )
 
 
+def render_evolucion_apilada(series_dict, order, color_keys, value_key="valor", label_map=None, dtick="M3", height=380):
+    """Grafico de area apilada semana a semana a partir de un dict
+    {clave: [{"fecha": ..., value_key: ...}, ...]} — el formato que
+    devuelven las funciones `*_evolucion` de data_loader.py. Una serie por
+    clave de `order`, coloreada con `color_keys`. Comun a las 4 pestanas de
+    evolucion por categoria (cartera, riesgo y uso de cripto, categoria de RV).
+    """
+    df = None
+    for key in order:
+        serie = pd.DataFrame(series_dict[key])[["fecha", value_key]]
+        serie = serie.rename(columns={value_key: key})
+        df = serie if df is None else df.merge(serie, on="fecha", how="outer")
+    df = df.sort_values("fecha").fillna(0)
+
+    fig = go.Figure()
+    for key in order:
+        color = c[color_keys.get(key, "text_muted")]
+        label = (label_map or {}).get(key, key)
+        fig.add_trace(go.Scatter(
+            x=df["fecha"], y=df[key], name=label,
+            mode="lines", stackgroup="one", line=dict(width=0.5, color=color),
+            fillcolor=hex_to_rgba(color, 0.65),
+            hovertemplate=f"{label}: " + "%{y:,.0f} €<extra></extra>",
+        ))
+    fig.update_layout(separators=",.", hovermode="x unified")
+    fig.update_xaxes(tickformat="%b %Y", dtick=dtick, showgrid=False)
+    fig.update_yaxes(tickformat=",.0f", ticksuffix=" €")
+    apply_layout(fig, height=height, showlegend=True)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
 def kpi_card(label, value_str, sub=None, value_color=None, dot_color=None, compact=False, mini=False):
     style = f' style="color:{value_color}"' if value_color else ""
     dot = (
@@ -258,7 +290,7 @@ with st.sidebar:
     if st.session_state.loaded_at:
         st.caption(f"Ultima lectura: {st.session_state.loaded_at.strftime('%d/%m/%Y %H:%M:%S')}")
     st.divider()
-    st.caption("Snapshot del patrimonio en el instante actual (sin evolucion temporal).")
+    st.caption("Snapshot del patrimonio actual, con evolución histórica semanal donde el Excel la registra.")
 
 try:
     data = load()
@@ -485,28 +517,10 @@ with tab_rv:
     # fechas que "Evolución de Renta Variable".
     # --------------------------------------------------------------------
     with st.expander("📈 Evolución de RV por categoría"):
-        df_evo_rvcat = None
-        for cat in CATEGORIA_ORDER:
-            serie = pd.DataFrame(data["rv_categoria_evolucion"][cat])[["fecha", "valor"]]
-            serie = serie.rename(columns={"valor": cat})
-            df_evo_rvcat = serie if df_evo_rvcat is None else df_evo_rvcat.merge(serie, on="fecha", how="outer")
-        df_evo_rvcat = df_evo_rvcat.sort_values("fecha").fillna(0)
-
-        fig_evo_rvcat = go.Figure()
-        for cat in CATEGORIA_ORDER:
-            color = c[CATEGORIA_COLOR_KEYS.get(cat, "text_muted")]
-            label = CATEGORIA_LABELS.get(cat, cat)
-            fig_evo_rvcat.add_trace(go.Scatter(
-                x=df_evo_rvcat["fecha"], y=df_evo_rvcat[cat], name=label,
-                mode="lines", stackgroup="one", line=dict(width=0.5, color=color),
-                fillcolor=hex_to_rgba(color, 0.65),
-                hovertemplate=f"{label}: " + "%{y:,.0f} €<extra></extra>",
-            ))
-        fig_evo_rvcat.update_layout(separators=",.", hovermode="x unified")
-        fig_evo_rvcat.update_xaxes(tickformat="%b %Y", dtick="M1", showgrid=False)
-        fig_evo_rvcat.update_yaxes(tickformat=",.0f", ticksuffix=" €")
-        apply_layout(fig_evo_rvcat, height=340, showlegend=True)
-        st.plotly_chart(fig_evo_rvcat, use_container_width=True, config={"displayModeBar": False})
+        render_evolucion_apilada(
+            data["rv_categoria_evolucion"], CATEGORIA_ORDER, CATEGORIA_COLOR_KEYS,
+            label_map=CATEGORIA_LABELS, dtick="M1", height=340,
+        )
         st.caption(
             "Valor por categoría apilado, semana a semana — leído de la hoja "
             "Evolucion del Excel."
@@ -657,27 +671,7 @@ with tab_cripto:
     # mismo patron que "Evolución de Renta Variable".
     # --------------------------------------------------------------------
     with st.expander(f"📈 Evolución histórica de Cripto"):
-        df_evo_cart = None
-        for cartera in CARTERA_ORDER:
-            serie = pd.DataFrame(data["cartera_evolucion"][cartera])[["fecha", "actual"]]
-            serie = serie.rename(columns={"actual": cartera})
-            df_evo_cart = serie if df_evo_cart is None else df_evo_cart.merge(serie, on="fecha", how="outer")
-        df_evo_cart = df_evo_cart.sort_values("fecha").fillna(0)
-
-        fig_evo_cart = go.Figure()
-        for cartera in CARTERA_ORDER:
-            color = c[CARTERA_COLOR_KEYS.get(cartera, "text_muted")]
-            fig_evo_cart.add_trace(go.Scatter(
-                x=df_evo_cart["fecha"], y=df_evo_cart[cartera], name=cartera,
-                mode="lines", stackgroup="one", line=dict(width=0.5, color=color),
-                fillcolor=hex_to_rgba(color, 0.65),
-                hovertemplate=f"{cartera}: " + "%{y:,.0f} €<extra></extra>",
-            ))
-        fig_evo_cart.update_layout(separators=",.", hovermode="x unified")
-        fig_evo_cart.update_xaxes(tickformat="%b %Y", dtick="M3", showgrid=False)
-        fig_evo_cart.update_yaxes(tickformat=",.0f", ticksuffix=" €")
-        apply_layout(fig_evo_cart, height=380, showlegend=True)
-        st.plotly_chart(fig_evo_cart, use_container_width=True, config={"displayModeBar": False})
+        render_evolucion_apilada(data["cartera_evolucion"], CARTERA_ORDER, CARTERA_COLOR_KEYS, value_key="actual")
         st.caption(
             "Valor actual de cada cartera apilado, semana a semana — leído de la "
             "hoja Evolucion del Excel."
@@ -689,27 +683,7 @@ with tab_cripto:
     # _load_cripto_riesgo_evolucion en data_loader.py).
     # --------------------------------------------------------------------
     with st.expander("📈 Evolución histórica por riesgo"):
-        df_evo_riesgo = None
-        for tier in RIESGO_ORDER:
-            serie = pd.DataFrame(data["cripto_riesgo_evolucion"][tier])[["fecha", "valor"]]
-            serie = serie.rename(columns={"valor": tier})
-            df_evo_riesgo = serie if df_evo_riesgo is None else df_evo_riesgo.merge(serie, on="fecha", how="outer")
-        df_evo_riesgo = df_evo_riesgo.sort_values("fecha").fillna(0)
-
-        fig_evo_riesgo = go.Figure()
-        for tier in RIESGO_ORDER:
-            color = c[RIESGO_COLOR_KEYS.get(tier, "text_muted")]
-            fig_evo_riesgo.add_trace(go.Scatter(
-                x=df_evo_riesgo["fecha"], y=df_evo_riesgo[tier], name=tier,
-                mode="lines", stackgroup="one", line=dict(width=0.5, color=color),
-                fillcolor=hex_to_rgba(color, 0.65),
-                hovertemplate=f"{tier}: " + "%{y:,.0f} €<extra></extra>",
-            ))
-        fig_evo_riesgo.update_layout(separators=",.", hovermode="x unified")
-        fig_evo_riesgo.update_xaxes(tickformat="%b %Y", dtick="M3", showgrid=False)
-        fig_evo_riesgo.update_yaxes(tickformat=",.0f", ticksuffix=" €")
-        apply_layout(fig_evo_riesgo, height=380, showlegend=True)
-        st.plotly_chart(fig_evo_riesgo, use_container_width=True, config={"displayModeBar": False})
+        render_evolucion_apilada(data["cripto_riesgo_evolucion"], RIESGO_ORDER, RIESGO_COLOR_KEYS)
         st.caption(
             "Valor por nivel de riesgo apilado, semana a semana — leído de la "
             "hoja Evolucion del Excel."
@@ -721,27 +695,7 @@ with tab_cripto:
     # _load_cripto_uso_evolucion en data_loader.py).
     # --------------------------------------------------------------------
     with st.expander("📈 Evolución histórica por uso"):
-        df_evo_uso = None
-        for uso in USUFRUCTO_ORDER:
-            serie = pd.DataFrame(data["cripto_uso_evolucion"][uso])[["fecha", "valor"]]
-            serie = serie.rename(columns={"valor": uso})
-            df_evo_uso = serie if df_evo_uso is None else df_evo_uso.merge(serie, on="fecha", how="outer")
-        df_evo_uso = df_evo_uso.sort_values("fecha").fillna(0)
-
-        fig_evo_uso = go.Figure()
-        for uso in USUFRUCTO_ORDER:
-            color = c[USUFRUCTO_COLOR_KEYS.get(uso, "text_muted")]
-            fig_evo_uso.add_trace(go.Scatter(
-                x=df_evo_uso["fecha"], y=df_evo_uso[uso], name=uso,
-                mode="lines", stackgroup="one", line=dict(width=0.5, color=color),
-                fillcolor=hex_to_rgba(color, 0.65),
-                hovertemplate=f"{uso}: " + "%{y:,.0f} €<extra></extra>",
-            ))
-        fig_evo_uso.update_layout(separators=",.", hovermode="x unified")
-        fig_evo_uso.update_xaxes(tickformat="%b %Y", dtick="M3", showgrid=False)
-        fig_evo_uso.update_yaxes(tickformat=",.0f", ticksuffix=" €")
-        apply_layout(fig_evo_uso, height=380, showlegend=True)
-        st.plotly_chart(fig_evo_uso, use_container_width=True, config={"displayModeBar": False})
+        render_evolucion_apilada(data["cripto_uso_evolucion"], USUFRUCTO_ORDER, USUFRUCTO_COLOR_KEYS)
         st.caption(
             "Valor por tipo de uso apilado, semana a semana — leído de la hoja "
             "Evolucion del Excel."

@@ -35,14 +35,12 @@ USUFRUCTO_ORDER = ["Hold", "Stake", "Farm"]
 # Evolucion!X:AJ -> serie semanal de valor actual y capital invertido por
 # cada una de las 5 carteras cripto. Ver _load_cartera_evolucion.
 #
-# Layout verificado en la cabecera Evolucion!fila 2 (a partir de la edicion
-# del usuario que anadio columna de invertido + % por cartera): cada cartera
-# ocupa un bloque [actual, invertido, % rendimiento] salvo 'Cartera Old' que
-# solo tiene [actual, invertido] (sin columna de % en la hoja). Antes de esa
-# edicion las 5 series vivian en S:AE sin bloque de invertido dedicado por
-# cartera (salvo New/RD26/DEFI/HYPE que ya tenian una 2a columna) — si el
-# usuario vuelve a insertar/mover columnas en Evolucion, reverificar esta
-# cabecera antes de asumir que estas letras siguen siendo validas.
+# Layout verificado en la cabecera Evolucion!fila 2: cada cartera ocupa un
+# bloque [actual, invertido, % rendimiento] salvo 'Cartera Old', que solo
+# tiene [actual, invertido] (sin columna de % en la hoja). El usuario edita
+# esta hoja a mano y puede volver a insertar/mover columnas — si las cifras
+# dejan de reconciliar (ver _validate), reverificar esta cabecera antes de
+# asumir que estas letras siguen siendo validas.
 CARTERA_EVOLUCION_COLS = {
     "Cartera Old": ("X", "Y"),
     "Cartera New": ("Z", "AA"),
@@ -52,11 +50,7 @@ CARTERA_EVOLUCION_COLS = {
 }
 
 # Evolucion!AL:AP -> desglose semanal por nivel de riesgo (Liquided/LP/
-# Medium/Gem/Crash) del conjunto de las 5 carteras. El historico hasta
-# 2026-09-06 se reconstruyo una vez (ver commits/conversacion previa: el
-# Excel solo tenia dato real de esa ultima semana) y el usuario pego el
-# resultado en estas columnas como punto de partida; de ahi en adelante las
-# va rellenando el semanalmente con datos reales. Ver _load_cripto_riesgo_evolucion.
+# Medium/Gem/Crash) del conjunto de las 5 carteras. Ver _load_cripto_riesgo_evolucion.
 RIESGO_EVOLUCION_COLS = {
     "Liquided": "AL",
     "LP": "AM",
@@ -65,8 +59,8 @@ RIESGO_EVOLUCION_COLS = {
     "Crash": "AP",
 }
 
-# Evolucion!AQ:AS -> desglose semanal por usufructo (Hold/Stake/Farm). Mismo
-# origen del historico que RIESGO_EVOLUCION_COLS. Ver _load_cripto_uso_evolucion.
+# Evolucion!AQ:AS -> desglose semanal por usufructo (Hold/Stake/Farm). Ver
+# _load_cripto_uso_evolucion.
 USO_EVOLUCION_COLS = {
     "Hold": "AQ",
     "Stake": "AR",
